@@ -51,16 +51,17 @@ Answer as BonsAI:""",
     },
     
     "structured": {
-        "name": "bonsai_care_structured", 
-        "template": """You are BonsAI, a professional bonsai care consultant. You only answer questions about bonsai plants. Provide a structured response to the customer's bonsai care question.
+        "name": "bonsai_care_seasons_structured", 
+        "template": f"""You are BonsAI, a professional bonsai care consultant. You only answer questions about bonsai plants. Provide a concise, safe and structured response to the customer's bonsai care question.
 
-Customer Question: {query}
+Customer Question: {{query}}
 
 Please structure your response as follows:
-1. **Problem Assessment**: Brief analysis of the bonsai issue
-2. **Immediate Actions**: What to do right now for your bonsai
-3. **Long-term Care**: Ongoing bonsai care recommendations
-4. **Prevention**: How to prevent this bonsai issue in the future
+1. Problem Assessment: Brief analysis of the bonsai issue
+2. Immediate Actions: What to do right now for your bonsai; Bullet list (max. 5)
+3. Current Season: Show how to care for a bonsai in the current season. You should consider Portugal as your region, and use {datetime.now().strftime('%Y-%m-%d')} (as in YYYY-MM-DD) as today's date
+4. Long-term Care: Ongoing bonsai care recommendations, containing a bullet list with 3 points (one for each season not shown in the '3. Current Season') showing the respective 'Key Tasks'. Keep the advice concise and easy for a beginner to follow
+5. Prevention: How to prevent this bonsai issue in the future
 
 If the question is not about bonsai, politely say: "I'm sorry, but I can only provide information related to bonsai plants."
 
@@ -109,7 +110,7 @@ Provide quick, actionable advice to save your bonsai!""",
 }
 
 # Global variables
-current_prompt_template = BONSAI_PROMPTS["basic"]
+current_prompt_template = BONSAI_PROMPTS["structured"]
 model_info = {}
 
 # HTML Template for the chat interface
@@ -138,7 +139,7 @@ CHAT_HTML_TEMPLATE = """
         
         .chat-container {
             width: 90%;
-            max-width: 800px;
+            max-width: 1200px;
             height: 90vh;
             background: white;
             border-radius: 20px;
@@ -149,8 +150,15 @@ CHAT_HTML_TEMPLATE = """
         }
         
         .chat-header {
-            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
-            color: white;
+            background: linear-gradient(90deg, 
+                        #FF0000 0%,   /* Red */
+                        #FF7F00 20%,  /* Orange */
+                        #FFFF00 40%,  /* Yellow */
+                        #00FF00 60%,  /* Green */
+                        #0000FF 80%,  /* Blue */
+                        #8B00FF 100%  /* Violet */
+                    );
+            color: black;
             padding: 20px;
             text-align: center;
             position: relative;
@@ -374,14 +382,14 @@ CHAT_HTML_TEMPLATE = """
     <div class="chat-container">
         <div class="chat-header">
             <div class="status-indicator"></div>
-            <h1>🌿 BonsAI Chat</h1>
-            <p>Your specialized bonsai care expert assistant</p>
+            <h1>🌿 BonsAI Chat for all Seasons⛄🔆</h1>
+            <p>Your specialized bonsai care expert assistant from Spring to Winter</p>
         </div>
         
         <div class="chat-messages" id="chatMessages">
             <div class="welcome-message">
                 <h3>Welcome to BonsAI!</h3>
-                <p>I'm your specialized bonsai care expert. Ask me anything about bonsai care, styling, watering, fertilizing, or any bonsai-related questions!</p>
+                <p>I'm your specialized bonsai care expert for all seasons. Ask me anything about bonsai care, styling, watering, fertilizing, or any bonsai-related questions!</p>
                 <div class="quick-questions">
                     <button class="quick-question" onclick="sendQuickQuestion(this)">How often should I water my Juniper bonsai?</button>
                     <button class="quick-question" onclick="sendQuickQuestion(this)">What soil mix is best for Ficus bonsai?</button>
@@ -521,7 +529,7 @@ CHAT_HTML_TEMPLATE = """
 </html>
 """
 
-def load_bonsai_prompt(prompt_type="basic"):
+def load_bonsai_prompt(prompt_type="structured"):
     """Load the appropriate bonsai prompt template - first try MLflow, then fallback to local"""
     global current_prompt_template, model_info
     
@@ -533,12 +541,12 @@ def load_bonsai_prompt(prompt_type="basic"):
         # Map prompt types to MLflow registry names
         mlflow_prompt_names = {
             "basic": "plant_care_basic",
-            "structured": "bonsai_care_structured", 
+            "structured": "bonsai_care_seasons_structured", 
             "diagnostic": "bonsai_care_diagnostic",
             "emergency": "bonsai_care_emergency"
         }
         
-        prompt_name = mlflow_prompt_names.get(prompt_type, "plant_care_basic")
+        prompt_name = mlflow_prompt_names.get(prompt_type, "bonsai_care_seasons_structured")
         
         # Try to load the prompt from MLflow registry
         try:
@@ -585,8 +593,8 @@ def load_bonsai_prompt(prompt_type="basic"):
         logger.info(f"✅ Loaded BonsAI prompt from local templates: {prompt_type}")
         return True
     
-    logger.warning(f"⚠️ Unknown prompt type: {prompt_type}, using basic")
-    return load_bonsai_prompt("basic")
+    logger.warning(f"⚠️ Unknown prompt type: {prompt_type}, using structured")
+    return load_bonsai_prompt("structured")
 
 def query_azure_openai(prompt: str) -> str:
     """Send query to Azure OpenAI with BonsAI personality"""
@@ -705,7 +713,7 @@ def switch_prompt():
 def reload_prompt_from_mlflow():
     """Reload the current prompt from MLflow registry"""
     try:
-        current_type = model_info.get('prompt_type', 'basic')
+        current_type = model_info.get('prompt_type', 'structured')
         
         if load_bonsai_prompt(current_type):
             return jsonify({
@@ -910,7 +918,7 @@ def initialize_app():
     logger.info("🌿 Initializing BonsAI Chat Bot")
     
     # Load the default bonsai prompt template (will try MLflow first)
-    if not load_bonsai_prompt("basic"):
+    if not load_bonsai_prompt("structured"):
         logger.warning("⚠️ Using fallback configuration")
     
     # Try to register local prompts to MLflow if they don't exist
@@ -918,9 +926,9 @@ def initialize_app():
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         client = mlflow.tracking.MlflowClient()
         
-        # Check if basic prompt exists, if not register all prompts
+        # Check if structured prompt exists, if not register all prompts
         try:
-            client.get_registered_prompt("plant_care_basic")
+            client.get_registered_prompt("bonsai_care_seasons_structured")
             logger.info("📝 BonsAI prompts already registered in MLflow")
         except:
             logger.info("📝 Failed to get BonsAI prompts to MLflow...")
